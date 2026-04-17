@@ -1,0 +1,6 @@
+kochi-graph.json
+kochi-wiki.html
+__pycache__/
+*.pyc
+.DS_Store
+.vercel/

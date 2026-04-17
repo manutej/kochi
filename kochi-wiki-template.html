@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KOCHI 故智 · Knowledge Universe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!--
+    CDN: 3d-force-graph UMD (bundles THREE internally). Classic script — no module/importmap needed.
+    Works in file:// context with no CORS issues.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/3d-force-graph/dist/3d-force-graph.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── CSS custom properties — dual theme ─────────── */
+    :root {
+      /* Dark (default) */
+      --bg:         #09090b;
+      --bg-graph:   #09090b;
+      --surface:    rgba(9,9,11,0.86);
+      --surface-hi: rgba(9,9,11,0.96);
+      --border:     rgba(255,255,255,0.07);
+      --border-hi:  rgba(255,255,255,0.14);
+      --text-hi:    #f1f5f9;
+      --text-md:    #94a3b8;
+      --text-lo:    #475569;
+      --link-col:   #0f2540;
+      --particle:   rgba(255,255,255,0.55);
+      --shadow:     0 4px 24px rgba(0,0,0,0.6);
+      --blur:       blur(20px);
+    }
+
+    [data-theme="light"] {
+      --bg:         #f8fafc;
+      --bg-graph:   #f1f5f9;
+      --surface:    rgba(248,250,252,0.92);
+      --surface-hi: rgba(248,250,252,0.98);
+      --border:     rgba(15,23,42,0.09);
+      --border-hi:  rgba(15,23,42,0.16);
+      --text-hi:    #0f172a;
+      --text-md:    #475569;
+      --text-lo:    #94a3b8;
+      --link-col:   #cbd5e1;
+      --particle:   rgba(15,23,42,0.3);
+      --shadow:     0 4px 24px rgba(0,0,0,0.12);
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text-md); font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+
+    /* ── Graph canvas ───────────────────────────────── */
+    #graph { position: fixed; inset: 0; transition: background 0.3s; }
+
+    /* ── Glass utility ──────────────────────────────── */
+    .glass {
+      background: var(--surface);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+    }
+
+    /* ── Header (top-left) ──────────────────────────── */
+    #header {
+      position: fixed; top: 18px; left: 18px; z-index: 10;
+      padding: 15px 18px 17px; min-width: 186px;
+    }
+    #header h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px; font-weight: 500; color: var(--text-hi);
+      letter-spacing: -0.01em; line-height: 1;
+    }
+    #header h1 .sub { color: var(--text-lo); font-size: 12px; margin-left: 6px; }
+    #vault-stats { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-lo); margin-top: 4px; letter-spacing: 0.02em; }
+    #legend { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .leg-row {
+      display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-md);
+      cursor: pointer; user-select: none; transition: color 0.15s;
+    }
+    .leg-row:hover { color: var(--text-hi); }
+    .leg-pip { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .leg-count { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-lo); }
+
+    /* ── Controls (top-right) ───────────────────────── */
+    #controls {
+      position: fixed; top: 18px; right: 18px; z-index: 10;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 7px;
+    }
+    #search-wrap { position: relative; width: 224px; }
+    #search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-lo); font-size: 13px; pointer-events: none; }
+    #search {
+      width: 100%; padding: 8px 11px 8px 28px;
+      font-family: 'Inter', sans-serif; font-size: 12px;
+      color: var(--text-hi); background: var(--surface);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--border); border-radius: 8px; outline: none;
+      transition: border-color 0.2s;
+    }
+    #search::placeholder { color: var(--text-lo); }
+    #search:focus { border-color: var(--border-hi); }
+    #search-count { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-lo); text-align: right; height: 13px; }
+
+    .btn-row { display: flex; gap: 6px; }
+    .btn {
+      font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
+      color: var(--text-md); background: var(--surface);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--border); border-radius: 7px;
+      padding: 7px 12px; cursor: pointer; white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      letter-spacing: 0.01em;
+    }
+    .btn:hover { color: var(--text-hi); border-color: var(--border-hi); }
+    .btn.lit { color: #93c5fd; border-color: rgba(147,197,253,0.28); background: rgba(147,197,253,0.07); }
+    [data-theme="light"] .btn.lit { color: #1d4ed8; border-color: rgba(29,78,216,0.28); background: rgba(29,78,216,0.07); }
+
+    /* ── Filter pills ───────────────────────────────── */
+    #filter-bar {
+      display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end;
+      max-width: 300px;
+    }
+    .pill {
+      display: flex; align-items: center; gap: 5px;
+      font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 500;
+      color: var(--text-lo); background: var(--surface);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 4px 10px; cursor: pointer; transition: all 0.15s;
+      white-space: nowrap; letter-spacing: 0.02em;
+    }
+    .pill:hover { color: var(--text-md); border-color: var(--border-hi); }
+    .pill.active { color: var(--text-hi); border-color: var(--border-hi); background: var(--surface-hi); }
+    .pill-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Reader panel ───────────────────────────────── */
+    #reader {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 364px; z-index: 20;
+      background: var(--surface-hi);
+      backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+    }
+    #reader.open { transform: translateX(0); }
+    #r-head { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #r-close { float: right; background: none; border: none; color: var(--text-lo); cursor: pointer; font-size: 15px; padding: 2px; transition: color 0.15s; }
+    #r-close:hover { color: var(--text-hi); }
+    .r-badge { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; margin-bottom: 8px; }
+    #r-title { font-size: 15px; font-weight: 600; color: var(--text-hi); line-height: 1.35; }
+    #r-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+    #r-summary { font-size: 12px; color: var(--text-md); line-height: 1.65; margin-bottom: 16px; }
+    .r-meta { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 16px; }
+    .r-cell { background: rgba(148,163,184,0.05); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; }
+    .r-clabel { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-lo); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
+    .r-cval { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text-hi); }
+    .r-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .r-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-lo); background: rgba(148,163,184,0.06); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; }
+
+    /* ── Loading overlay ────────────────────────────── */
+    #loader {
+      position: fixed; inset: 0; z-index: 100; background: var(--bg);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      transition: opacity 0.6s ease;
+    }
+    #loader.fade { opacity: 0; pointer-events: none; }
+    .l-logo { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 400; color: var(--text-hi); letter-spacing: -0.02em; }
+    .l-logo span { color: var(--text-lo); margin-left: 8px; }
+    .l-track { width: 160px; height: 1px; background: var(--border); border-radius: 1px; overflow: hidden; }
+    .l-fill { height: 100%; background: linear-gradient(90deg,#60a5fa,#c084fc,#fb7185); border-radius: 1px; animation: lslide 1.6s ease-in-out infinite; }
+    @keyframes lslide { 0%{transform:translateX(-100%) scaleX(.4)} 50%{transform:translateX(80%) scaleX(1)} 100%{transform:translateX(250%) scaleX(.4)} }
+    .l-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-lo); letter-spacing: 0.06em; }
+  </style>
+</head>
+<body>
+
+<!-- Safety: dismiss loader after 10s even if module fails -->
+<script>
+setTimeout(() => {
+  const l = document.getElementById('loader');
+  if (l) { l.classList.add('fade'); setTimeout(() => { l.style.display='none'; }, 700); }
+}, 10000);
+</script>
+
+<!-- Loading screen -->
+<div id="loader">
+  <div class="l-logo">KOCHI <span>故智</span></div>
+  <div class="l-track"><div class="l-fill"></div></div>
+  <div class="l-sub" id="l-sub">Initialising phi spatial layout…</div>
+</div>
+
+<!-- Header + legend -->
+<div id="header" class="glass">
+  <h1>KOCHI <span class="sub">故智</span></h1>
+  <div id="vault-stats">545 nodes · 2001 edges · 12 clusters</div>
+  <div id="legend"></div>
+</div>
+
+<!-- Controls -->
+<div id="controls">
+  <div id="search-wrap">
+    <span id="search-icon">⌕</span>
+    <input id="search" type="text" placeholder="Search… (/)">
+  </div>
+  <div id="search-count"></div>
+  <div id="filter-bar"></div>
+  <div class="btn-row">
+    <button class="btn lit" id="btn-rotate">⟳ Rotating</button>
+    <button class="btn" id="btn-color">By Type</button>
+    <button class="btn" id="btn-theme" title="Toggle light/dark">☾</button>
+  </div>
+</div>
+
+<!-- Graph -->
+<div id="graph"></div>
+
+<!-- Reader panel -->
+<div id="reader">
+  <div id="r-head">
+    <button id="r-close">✕</button>
+    <div id="r-badge"></div>
+    <div id="r-title"></div>
+  </div>
+  <div id="r-body">
+    <div id="r-summary"></div>
+    <div id="r-meta"></div>
+    <div id="r-tags"></div>
+  </div>
+</div>
+
+<!-- Embedded graph data (phi-computed, 545 nodes) -->
+<script type="application/json" id="kd">GRAPH_JSON_PLACEHOLDER</script>
+
+<!-- Main script (UMD globals: window.THREE, window.ForceGraph3D) -->
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const GD = JSON.parse(document.getElementById('kd').textContent);
+
+// ── Color system (ShadCN-muted, dual-theme) ───────────────────────────────────
+const COLORS = {
+  dark: {
+    entity_person:  '#60a5fa',   // blue-400
+    entity_product: '#38bdf8',   // sky-400
+    entity_org:     '#818cf8',   // indigo-400
+    concept:        '#34d399',   // emerald-400
+    source:         '#fbbf24',   // amber-400
+    hub:            '#c084fc',   // purple-400
+    query:          '#fb7185',   // rose-400
+    _default:       '#94a3b8',
+  },
+  light: {
+    entity_person:  '#1d4ed8',   // blue-700
+    entity_product: '#0369a1',   // sky-700
+    entity_org:     '#4338ca',   // indigo-700
+    concept:        '#047857',   // emerald-700
+    source:         '#b45309',   // amber-700
+    hub:            '#6d28d9',   // violet-700
+    query:          '#be123c',   // rose-700
+    _default:       '#64748b',
+  },
+};
+
+const COMM_DARK  = ['#60a5fa','#34d399','#fbbf24','#c084fc','#fb7185','#2dd4bf','#f97316','#a3e635','#e879f9','#38bdf8','#4ade80','#facc15'];
+const COMM_LIGHT = ['#1d4ed8','#047857','#b45309','#6d28d9','#be123c','#0f766e','#c2410c','#4d7c0f','#9333ea','#0c4a6e','#15803d','#a16207'];
+
+// Type display config
+const TYPE_CFG = {
+  entity:  { label: 'Entity',  mult: 1.4 },
+  concept: { label: 'Concept', mult: 1.8 },
+  source:  { label: 'Source',  mult: 0.75 },
+  hub:     { label: 'Hub',     mult: 2.8 },
+  query:   { label: 'Query',   mult: 1.6 },
+};
+
+// Entity kind config
+const EKIND_CFG = {
+  person:  { label: 'People',   symbol: '◎' },
+  product: { label: 'Products', symbol: '◆' },
+  org:     { label: 'Orgs',     symbol: '▣' },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let isDark      = true;
+let colorMode   = 'type';    // 'type' | 'community'
+let rotating    = true;
+let searchQuery = '';
+let activeKind  = 'all';     // entity kind filter
+let bloomRef    = null;
+
+// ── Color accessors ───────────────────────────────────────────────────────────
+function nodeColorKey(n) {
+  if (n.type === 'entity') return `entity_${n.entity_kind || 'product'}`;
+  return n.type;
+}
+
+function trueColor(n) {
+  if (colorMode === 'community') {
+    return (isDark ? COMM_DARK : COMM_LIGHT)[n.community % 12];
+  }
+  const palette = isDark ? COLORS.dark : COLORS.light;
+  return palette[nodeColorKey(n)] || palette._default;
+}
+
+function isDimmed(n) {
+  if (activeKind !== 'all') {
+    if (n.type === 'entity') { if (n.entity_kind !== activeKind) return true; }
+    else { if (n.type !== activeKind) return true; }
+  }
+  if (searchQuery && !n.label.toLowerCase().includes(searchQuery)) return true;
+  return false;
+}
+
+function dispColor(n) {
+  return isDimmed(n) ? (isDark ? '#141416' : '#e2e8f0') : trueColor(n);
+}
+
+function nodeVal(n) {
+  return Math.max(0.5, (1 + Math.sqrt(n.degree)) * (TYPE_CFG[n.type]?.mult ?? 1));
+}
+
+// Fix all nodes at phi-computed positions immediately (no simulation drift)
+GD.nodes.forEach(n => { n.fx = n.x; n.fy = n.y; n.fz = n.z; });
+
+// ── Build graph ───────────────────────────────────────────────────────────────
+if (typeof ForceGraph3D === 'undefined') {
+  document.getElementById('l-sub').textContent = 'ERROR: CDN failed. Run: python3 -m http.server 8765 --directory KOCHI/ui/';
+  console.error('[KOCHI] ForceGraph3D not loaded. Open via HTTP server, not file://');
+  dismissLoader = () => {}; // keep loader visible to show error
+  throw new Error('ForceGraph3D unavailable');
+}
+document.getElementById('l-sub').textContent = 'Constructing 545-node graph…';
+
+const Graph = ForceGraph3D({ controlType: 'orbit' })
+  .backgroundColor(isDark ? '#09090b' : '#f1f5f9')
+  .nodeVal(nodeVal)
+  .nodeColor(dispColor)
+  .nodeOpacity(0.92)
+  .nodeResolution(14)
+  .nodeLabel(n => `<div style="
+      font-family:Inter,system-ui,sans-serif;font-size:12px;
+      background:rgba(7,7,9,.95);border:1px solid rgba(255,255,255,.1);
+      border-radius:8px;padding:8px 12px;color:#e2e8f0;
+      max-width:240px;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,.7)">
+      <strong style="color:#f1f5f9;display:block;margin-bottom:3px">${n.label}</strong>
+      ${n.summary ? `<span style="color:#94a3b8;font-size:11px">${n.summary.slice(0,120)}${n.summary.length>120?'…':''}</span>` : ''}
+    </div>`)
+  .linkColor(() => isDark ? '#334155' : '#cbd5e1')
+  .linkOpacity(isDark ? 0.28 : 0.35)
+  .linkWidth(0.5)
+  .linkDirectionalParticles(2)
+  .linkDirectionalParticleSpeed(0.005)
+  .linkDirectionalParticleWidth(1.6)
+  .linkDirectionalParticleColor(() => isDark ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.25)')
+  .onEngineStop(() => Graph.zoomToFit(600, 80))
+  .onNodeClick(openReader)
+  .onBackgroundClick(closeReader)
+  (document.getElementById('graph'));
+
+Graph.graphData(GD);
+
+// ── Dismiss loader — graph is ready ───────────────────────────────────────────
+// (Bloom skipped: THREE r175 postprocessing addons are ESM-only; UMD path omits them)
+dismissLoader();
+
+function dismissLoader() {
+  const l = document.getElementById('loader');
+  if (l) { l.classList.add('fade'); setTimeout(() => { l.style.display='none'; }, 700); }
+}
+
+// ── Camera & rotation ─────────────────────────────────────────────────────────
+const controls = Graph.controls();
+controls.autoRotate      = true;
+controls.autoRotateSpeed = 0.45;   // ≈ 2 min / orbit
+controls.enableDamping   = true;
+controls.dampingFactor   = 0.07;
+
+// ── Legend builder ─────────────────────────────────────────────────────────────
+function buildLegend() {
+  const el = document.getElementById('legend');
+  const palette = isDark ? COLORS.dark : COLORS.light;
+
+  if (colorMode === 'type') {
+    const counts = {};
+    GD.nodes.forEach(n => { counts[n.type] = (counts[n.type]||0)+1; });
+    const rows = [
+      ['hub',     palette.hub,            'Hub'],
+      ['concept', palette.concept,        'Concept'],
+      ['entity',  palette.entity_person,  'Entity'],
+      ['source',  palette.source,         'Source'],
+      ['query',   palette.query,          'Query'],
+    ];
+    el.innerHTML = rows.map(([t, c, label]) => `
+      <div class="leg-row">
+        <div class="leg-pip" style="background:${c};box-shadow:0 0 6px ${c}55"></div>
+        <span>${label}</span>
+        <span class="leg-count">${counts[t]??0}</span>
+      </div>`).join('');
+  } else {
+    const counts = {};
+    GD.nodes.forEach(n => { counts[n.community]=(counts[n.community]||0)+1; });
+    const comms = isDark ? COMM_DARK : COMM_LIGHT;
+    el.innerHTML = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([c,cnt]) => {
+      const col = comms[c%12];
+      return `<div class="leg-row">
+        <div class="leg-pip" style="background:${col};box-shadow:0 0 6px ${col}55"></div>
+        <span>Cluster ${c}</span>
+        <span class="leg-count">${cnt}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ── Filter pills builder ───────────────────────────────────────────────────────
+function buildFilterBar() {
+  const palette = isDark ? COLORS.dark : COLORS.light;
+  const filters = [
+    { kind: 'all',     label: 'All',      color: '#94a3b8' },
+    { kind: 'person',  label: 'People',   color: palette.entity_person },
+    { kind: 'product', label: 'Products', color: palette.entity_product },
+    { kind: 'org',     label: 'Orgs',     color: palette.entity_org },
+    { kind: 'concept', label: 'Concepts', color: palette.concept },
+    { kind: 'source',  label: 'Sources',  color: palette.source },
+    { kind: 'hub',     label: 'Hubs',     color: palette.hub },
+  ];
+  const el = document.getElementById('filter-bar');
+  el.innerHTML = filters.map(f => `
+    <button class="pill${activeKind===f.kind?' active':''}" data-kind="${f.kind}">
+      ${f.kind !== 'all' ? `<span class="pill-dot" style="background:${f.color}"></span>` : ''}
+      ${f.label}
+    </button>`).join('');
+  el.querySelectorAll('.pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeKind = btn.dataset.kind;
+      buildFilterBar();
+      Graph.nodeColor(dispColor);
+      const n = activeKind === 'all'
+        ? GD.nodes.length
+        : GD.nodes.filter(n => {
+            if (n.type === 'entity') return n.entity_kind === activeKind;
+            return n.type === activeKind;
+          }).length;
+      document.getElementById('search-count').textContent =
+        activeKind === 'all' ? '' : `${n} ${activeKind === 'all' ? 'nodes' : btn.textContent.trim()}`;
+    });
+  });
+}
+
+buildLegend();
+buildFilterBar();
+
+// ── Reader panel ───────────────────────────────────────────────────────────────
+function openReader(node) {
+  const col = trueColor(node);
+  const palette = isDark ? COLORS.dark : COLORS.light;
+  const ekind = node.entity_kind ? ` · ${node.entity_kind}` : '';
+
+  document.getElementById('r-badge').innerHTML = `
+    <span class="r-badge" style="background:${col}1a;color:${col}">
+      ${(TYPE_CFG[node.type]?.label ?? node.type).toUpperCase()}${ekind.toUpperCase()}
+    </span>`;
+  document.getElementById('r-title').textContent  = node.label;
+  document.getElementById('r-summary').textContent = node.summary || 'No summary available.';
+  document.getElementById('r-meta').innerHTML = `
+    <div class="r-meta">
+      <div class="r-cell"><div class="r-clabel">Degree</div><div class="r-cval">${node.degree}</div></div>
+      <div class="r-cell"><div class="r-clabel">Centrality</div><div class="r-cval">${(node.centrality*100).toFixed(2)}%</div></div>
+      <div class="r-cell"><div class="r-clabel">Cluster</div><div class="r-cval" style="color:${col}">${node.community}</div></div>
+    </div>`;
+  const tags = node.tags ?? [];
+  document.getElementById('r-tags').innerHTML = tags.length
+    ? `<div class="r-tags">${tags.map(t=>`<span class="r-tag">${t}</span>`).join('')}</div>`
+    : '';
+
+  document.getElementById('reader').classList.add('open');
+
+  // Fly camera to node
+  const dist = 130;
+  const len  = Math.hypot(node.x||.01, node.y||.01, node.z||.01);
+  Graph.cameraPosition(
+    { x: node.x*(len+dist)/len, y: node.y*(len+dist)/len, z: node.z*(len+dist)/len },
+    node, 900
+  );
+}
+
+function closeReader() {
+  document.getElementById('reader').classList.remove('open');
+}
+document.getElementById('r-close').addEventListener('click', closeReader);
+
+// ── Control handlers ───────────────────────────────────────────────────────────
+// Rotation toggle
+const btnRotate = document.getElementById('btn-rotate');
+btnRotate.addEventListener('click', () => {
+  rotating = !rotating;
+  controls.autoRotate = rotating;
+  btnRotate.textContent = rotating ? '⟳ Rotating' : '▶ Paused';
+  btnRotate.classList.toggle('lit', rotating);
+});
+
+// Color mode toggle
+const btnColor = document.getElementById('btn-color');
+btnColor.addEventListener('click', () => {
+  colorMode = colorMode === 'type' ? 'community' : 'type';
+  const isComm = colorMode === 'community';
+  btnColor.textContent = isComm ? 'By Cluster' : 'By Type';
+  btnColor.classList.toggle('lit', isComm);
+  Graph.nodeColor(dispColor);
+  buildLegend();
+  buildFilterBar();
+});
+
+// Theme toggle
+const btnTheme = document.getElementById('btn-theme');
+btnTheme.addEventListener('click', () => {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  btnTheme.textContent = isDark ? '☾' : '☀';
+  Graph.backgroundColor(isDark ? '#09090b' : '#f1f5f9');
+  Graph.nodeColor(dispColor);
+  Graph.linkColor(() => isDark ? '#0f2540' : '#cbd5e1');
+  Graph.linkOpacity(isDark ? 0.22 : 0.35);
+  Graph.linkDirectionalParticleColor(() => isDark ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.25)');
+  if (bloomRef) { bloomRef.strength = isDark ? 1.85 : 0.0; }
+  buildLegend();
+  buildFilterBar();
+});
+
+// Search
+const searchEl  = document.getElementById('search');
+const countEl   = document.getElementById('search-count');
+searchEl.addEventListener('input', e => {
+  searchQuery = e.target.value.toLowerCase().trim();
+  Graph.nodeColor(dispColor);
+  if (searchQuery) {
+    const n = GD.nodes.filter(n => n.label.toLowerCase().includes(searchQuery)).length;
+    countEl.textContent = `${n} of ${GD.nodes.length} matching`;
+  } else {
+    countEl.textContent = '';
+  }
+});
+
+// Keyboard shortcuts
+window.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== searchEl) {
+    e.preventDefault(); searchEl.focus(); searchEl.select();
+  }
+  if (e.key === ' ' && document.activeElement !== searchEl) {
+    e.preventDefault();
+    rotating = !rotating;
+    controls.autoRotate = rotating;
+    btnRotate.textContent = rotating ? '⟳ Rotating' : '▶ Paused';
+    btnRotate.classList.toggle('lit', rotating);
+  }
+  if (e.key === 'Escape') {
+    closeReader(); searchEl.blur();
+    if (searchQuery) { searchQuery=''; searchEl.value=''; countEl.textContent=''; Graph.nodeColor(dispColor); }
+  }
+});
+
+window.addEventListener('resize', () => Graph.width(window.innerWidth).height(window.innerHeight));
+</script>
+</body>
+</html>
