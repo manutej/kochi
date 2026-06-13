@@ -33,7 +33,10 @@ except ImportError:
     print("ERROR: networkx not found. Run: pip install networkx", file=sys.stderr)
     sys.exit(1)
 
-WIKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'wiki')
+WIKI_DIR = os.environ.get(
+    'KOCHI_WIKI_DIR',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'wiki'),
+)
 OUT_JSON  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kochi-graph.json')
 
 META_FILES = {'index.md', 'log.md', 'hot.md'}
@@ -290,6 +293,14 @@ def main():
     print("Collecting wiki pages...")
     nodes, edges = collect_pages()
     print(f"  → {len(nodes)} pages, {len(edges)} raw wikilinks")
+
+    if not nodes:
+        print(
+            f"ERROR: 0 pages produced from WIKI_DIR={WIKI_DIR!r}. "
+            "Check the path (set KOCHI_WIKI_DIR) and that pages have 'type' frontmatter.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     print("Building graph...")
     G = build_graph(nodes, edges)
