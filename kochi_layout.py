@@ -15,6 +15,7 @@ Run from KOCHI/ directory:
 Output: ui/kochi-graph.json
 """
 
+import base64
 import os
 import re
 import json
@@ -318,8 +319,43 @@ def graph_stats(output: dict) -> tuple:
     return n_nodes, n_links, n_comms
 
 
+_FONT_FACE_RULES = [
+    ('inter-latin-300-normal.woff2', "'Inter'", 300, 'normal'),
+    ('inter-latin-400-normal.woff2', "'Inter'", 400, 'normal'),
+    ('inter-latin-500-normal.woff2', "'Inter'", 500, 'normal'),
+    ('inter-latin-600-normal.woff2', "'Inter'", 600, 'normal'),
+    ('jetbrains-mono-latin-400-normal.woff2', "'JetBrains Mono'", 400, 'normal'),
+    ('jetbrains-mono-latin-500-normal.woff2', "'JetBrains Mono'", 500, 'normal'),
+]
+
+
+def _repo_root() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _inline_font_faces() -> str:
+    fonts_dir = os.path.join(_repo_root(), 'vendor', 'fonts')
+    rules = []
+    for fname, family, weight, style in _FONT_FACE_RULES:
+        path = os.path.join(fonts_dir, fname)
+        with open(path, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('ascii')
+        rules.append(
+            f"@font-face {{ font-family: {family}; font-style: {style}; font-weight: {weight}; "
+            f"font-display: swap; src: url(data:font/woff2;base64,{b64}) format('woff2'); }}"
+        )
+    return '\n    '.join(rules)
+
+
+def _inline_library_script() -> str:
+    lib_path = os.path.join(_repo_root(), 'vendor', '3d-force-graph.min.js')
+    with open(lib_path, 'r', encoding='utf-8') as f:
+        lib = f.read()
+    return f'<script>\n{lib}\n</script>'
+
+
 def embed_wiki_html(template_path: str, out_path: str, graph_path: str) -> None:
-    """Substitute graph JSON and live vault stats into kochi-wiki-template.html."""
+    """Substitute graph JSON, offline assets, and live vault stats into kochi-wiki-template.html."""
     with open(graph_path, 'r', encoding='utf-8') as f:
         graph_json = f.read()
     graph = json.loads(graph_json)
@@ -333,6 +369,8 @@ def embed_wiki_html(template_path: str, out_path: str, graph_path: str) -> None:
     html = html.replace('GRAPH_JSON_PLACEHOLDER', graph_json)
     html = html.replace('__KOCHI_VAULT_STATS__', vault_stats)
     html = html.replace('__KOCHI_LOADER_SUB__', loader_sub)
+    html = html.replace('__KOCHI_INLINE_FONTS__', _inline_font_faces())
+    html = html.replace('__KOCHI_INLINE_SCRIPT__', _inline_library_script())
 
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
