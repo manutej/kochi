@@ -26,8 +26,7 @@ cd kochi
 pip install networkx pyyaml python-louvain
 
 # 3. Build from a wiki folder (default: ./sample-wiki/)
-#    KOCHI_WIKI_DIR=/path/to/vault bash build.sh
-#    or: bash build.sh /path/to/vault
+#    bash build.sh /path/to/vault
 bash build.sh
 # → outputs kochi-wiki.html (graph JSON is embedded; no manual embed step)
 
