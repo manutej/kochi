@@ -33,12 +33,15 @@ except ImportError:
     print("ERROR: networkx not found. Run: pip install networkx", file=sys.stderr)
     sys.exit(1)
 
-WIKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'wiki')
+_DEFAULT_WIKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample-wiki')
+WIKI_DIR = os.environ.get('KOCHI_WIKI_DIR') or _DEFAULT_WIKI_DIR
 OUT_JSON  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kochi-graph.json')
 
 META_FILES = {'index.md', 'log.md', 'hot.md'}
 
 WIKILINK_RE   = re.compile(r'\[\[([^\]|#\[]+)(?:\|[^\]]+)?\]\]')
+MDLINK_RE     = re.compile(r'\[[^\]]*\]\(([^)#]+\.md)\)')
+HEADING_RE    = re.compile(r'^#\s+(.+)$', re.MULTILINE)
 FRONTMATTER_RE = re.compile(r'^---\s*\n(.*?)\n---', re.DOTALL)
 
 # ── Golden ratio constants ────────────────────────────────────────────────────
@@ -62,6 +65,20 @@ def extract_wikilinks(content: str) -> list:
     return [slug.strip().lower() for slug in WIKILINK_RE.findall(content) if slug.strip()]
 
 
+def extract_markdown_links(content: str) -> list:
+    slugs = []
+    for target in MDLINK_RE.findall(content):
+        base = os.path.basename(target.strip())
+        if base.lower().endswith('.md'):
+            slugs.append(os.path.splitext(base)[0].lower())
+    return slugs
+
+
+def first_heading(content: str) -> str:
+    m = HEADING_RE.search(content)
+    return m.group(1).strip() if m else ''
+
+
 def collect_pages() -> tuple:
     nodes: dict = {}
     edges: list = []
@@ -75,38 +92,54 @@ def collect_pages() -> tuple:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            fm = parse_frontmatter(content)
-            if not fm or 'type' not in fm:
-                continue
+            has_fm = bool(FRONTMATTER_RE.match(content))
+            fm = parse_frontmatter(content) if has_fm else {}
 
-            node_id = os.path.splitext(fname)[0].lower()
-            ntype   = str(fm.get('type', 'concept'))
+            if has_fm:
+                if not fm or 'type' not in fm:
+                    continue
+                node_id = os.path.splitext(fname)[0].lower()
+                ntype   = str(fm.get('type', 'concept'))
+                label   = str(fm.get('title', node_id))
+                summary = str(fm.get('summary', ''))[:200]
+                tags    = fm.get('tags', []) or []
+                body_start = content.find('\n---', 3)
+                body = content[body_start:] if body_start != -1 else content
+            else:
+                node_id = os.path.splitext(fname)[0].lower()
+                ntype   = 'concept'
+                label   = first_heading(content) or os.path.splitext(fname)[0]
+                summary = ''
+                tags    = []
+                body = content
 
             nodes[node_id] = {
                 'id':          node_id,
-                'label':       str(fm.get('title', node_id)),
+                'label':       label,
                 'type':        ntype,
                 'entity_kind': str(fm.get('entity_kind', '')) if ntype == 'entity' else '',
-                'summary':     str(fm.get('summary', ''))[:200],
-                'tags':        fm.get('tags', []) or [],
+                'summary':     summary,
+                'tags':        tags,
             }
 
-            # Related frontmatter wikilinks
-            related = fm.get('related', [])
-            if isinstance(related, list):
-                for item in related:
-                    if isinstance(item, str):
-                        slug = re.sub(r'^\[\[|\]\]$', '', item)
-                        slug = slug.split('|')[0].split('#')[0].strip().lower()
-                        if slug:
-                            edges.append((node_id, slug))
+            if has_fm:
+                # Related frontmatter wikilinks
+                related = fm.get('related', [])
+                if isinstance(related, list):
+                    for item in related:
+                        if isinstance(item, str):
+                            slug = re.sub(r'^\[\[|\]\]$', '', item)
+                            slug = slug.split('|')[0].split('#')[0].strip().lower()
+                            if slug:
+                                edges.append((node_id, slug))
 
-            # Body wikilinks (skip frontmatter block)
-            body_start = content.find('\n---', 3)
-            body = content[body_start:] if body_start != -1 else content
             for link in extract_wikilinks(body):
                 if link != node_id:
                     edges.append((node_id, link))
+            if not has_fm:
+                for link in extract_markdown_links(body):
+                    if link != node_id:
+                        edges.append((node_id, link))
 
     return nodes, edges
 
