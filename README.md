@@ -25,23 +25,13 @@ cd kochi
 # 2. Install deps
 pip install networkx pyyaml python-louvain
 
-# 3. Point to your wiki
-# Edit WIKI_DIR in kochi_layout.py (default: ./sample-wiki/)
-vim kochi_layout.py
+# 3. Build from a wiki folder (default: ./sample-wiki/)
+#    KOCHI_WIKI_DIR=/path/to/vault bash build.sh
+#    or: bash build.sh /path/to/vault
+bash build.sh
+# → outputs kochi-wiki.html (graph JSON is embedded; no manual embed step)
 
-# 4. Build the graph
-python3 kochi_layout.py
-# → outputs kochi-graph.json
-
-# 5. Embed into the viewer
-python3 -c "
-with open('kochi-graph.json') as f: j=f.read()
-with open('kochi-wiki-template.html') as f: t=f.read()
-open('kochi-wiki.html','w').write(t.replace('GRAPH_JSON_PLACEHOLDER',j))
-print('Done — open kochi-wiki.html')
-"
-
-# 6. Open
+# 4. Open
 open kochi-wiki.html
 ```
 

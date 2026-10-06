@@ -1,2 +1,4 @@
 3d-force-graph@1.80.1 sha256:13088340aad408156064fd120c3bc3a47c93a3cc45b8f132d6284b20e2223be9
-fonts: Inter vendor/fonts/OFL.txt, JetBrains Mono vendor/fonts/OFL-JetBrainsMono.txt
+fonts: Inter @fontsource/inter@5.0.18 (https://www.npmjs.com/package/@fontsource/inter), JetBrains Mono @fontsource/jetbrains-mono@5.0.18 (https://www.npmjs.com/package/@fontsource/jetbrains-mono)
+files: inter-latin-300-normal.woff2, inter-latin-400-normal.woff2, inter-latin-500-normal.woff2, inter-latin-600-normal.woff2, jetbrains-mono-latin-400-normal.woff2, jetbrains-mono-latin-500-normal.woff2
+licences: vendor/fonts/OFL.txt (Inter), vendor/fonts/OFL-JetBrainsMono.txt (JetBrains Mono)
