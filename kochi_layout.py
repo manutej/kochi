@@ -311,6 +311,33 @@ def assemble(nodes, edges, G, pos, deg, btw, partition):
     return {'nodes': out_nodes, 'links': out_links}
 
 
+def graph_stats(output: dict) -> tuple:
+    n_nodes = len(output['nodes'])
+    n_links = len(output['links'])
+    n_comms = len({n['community'] for n in output['nodes']}) if output['nodes'] else 0
+    return n_nodes, n_links, n_comms
+
+
+def embed_wiki_html(template_path: str, out_path: str, graph_path: str) -> None:
+    """Substitute graph JSON and live vault stats into kochi-wiki-template.html."""
+    with open(graph_path, 'r', encoding='utf-8') as f:
+        graph_json = f.read()
+    graph = json.loads(graph_json)
+    n_nodes, n_links, n_comms = graph_stats(graph)
+    vault_stats = f'{n_nodes} nodes · {n_links} edges · {n_comms} clusters'
+    loader_sub = f'Constructing {n_nodes}-node graph…'
+
+    with open(template_path, 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    html = html.replace('GRAPH_JSON_PLACEHOLDER', graph_json)
+    html = html.replace('__KOCHI_VAULT_STATS__', vault_stats)
+    html = html.replace('__KOCHI_LOADER_SUB__', loader_sub)
+
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

@@ -20,10 +20,11 @@ python3 -c "import networkx, yaml" 2>/dev/null || {
 KOCHI_WIKI_DIR="$WIKI_DIR" python3 kochi_layout.py
 
 python3 -c "
-with open('kochi-graph.json') as f: j=f.read()
-with open('kochi-wiki-template.html') as f: t=f.read()
-open('$OUT_HTML','w').write(t.replace('GRAPH_JSON_PLACEHOLDER',j))
-print('Built: $OUT_HTML (' + str(len(open('$OUT_HTML').read())//1024) + 'KB)')
+import kochi_layout
+kochi_layout.embed_wiki_html('kochi-wiki-template.html', '$OUT_HTML', 'kochi-graph.json')
+import os
+size_kb = os.path.getsize('$OUT_HTML') // 1024
+print(f'Built: $OUT_HTML ({size_kb}KB)')
 "
 
 echo ""
