@@ -279,6 +279,15 @@ const EKIND_CFG = {
   org:     { label: 'Orgs',     symbol: '▣' },
 };
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let isDark      = true;
 let colorMode   = 'type';    // 'type' | 'community'
@@ -341,8 +350,8 @@ const Graph = ForceGraph3D({ controlType: 'orbit' })
       background:rgba(7,7,9,.95);border:1px solid rgba(255,255,255,.1);
       border-radius:8px;padding:8px 12px;color:#e2e8f0;
       max-width:240px;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,.7)">
-      <strong style="color:#f1f5f9;display:block;margin-bottom:3px">${n.label}</strong>
-      ${n.summary ? `<span style="color:#94a3b8;font-size:11px">${n.summary.slice(0,120)}${n.summary.length>120?'…':''}</span>` : ''}
+      <strong style="color:#f1f5f9;display:block;margin-bottom:3px">${escapeHtml(n.label)}</strong>
+      ${n.summary ? `<span style="color:#94a3b8;font-size:11px">${escapeHtml(n.summary.slice(0, 120))}${n.summary.length>120?'…':''}</span>` : ''}
     </div>`)
   .linkColor(() => isDark ? '#334155' : '#cbd5e1')
   .linkOpacity(isDark ? 0.28 : 0.35)
@@ -395,7 +404,7 @@ function buildLegend() {
       return `
       <div class="leg-row">
         <div class="leg-pip" style="background:${c};box-shadow:0 0 6px ${c}55"></div>
-        <span>${label}</span>
+        <span>${escapeHtml(label)}</span>
         <span class="leg-count">${counts[t]}</span>
       </div>`;
     }).join('');
@@ -453,15 +462,6 @@ buildLegend();
 buildFilterBar();
 
 // ── Reader panel ───────────────────────────────────────────────────────────────
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function openReader(node) {
   const col = trueColor(node);
   const palette = isDark ? COLORS.dark : COLORS.light;

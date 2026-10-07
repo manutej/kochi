@@ -377,11 +377,19 @@ def embed_wiki_html(template_path: str, out_path: str, graph_path: str) -> None:
     with open(template_path, 'r', encoding='utf-8') as f:
         html = f.read()
 
-    html = html.replace('GRAPH_JSON_PLACEHOLDER', graph_json)
-    html = html.replace('__KOCHI_VAULT_STATS__', vault_stats)
-    html = html.replace('__KOCHI_LOADER_SUB__', loader_sub)
-    html = html.replace('__KOCHI_INLINE_FONTS__', _inline_font_faces())
-    html = html.replace('__KOCHI_INLINE_SCRIPT__', _inline_library_script())
+    replacements = {
+        'GRAPH_JSON_PLACEHOLDER': graph_json,
+        '__KOCHI_VAULT_STATS__': vault_stats,
+        '__KOCHI_LOADER_SUB__': loader_sub,
+        '__KOCHI_INLINE_FONTS__': _inline_font_faces(),
+        '__KOCHI_INLINE_SCRIPT__': _inline_library_script(),
+    }
+    token_pattern = '|'.join(re.escape(token) for token in replacements)
+
+    def _substitute_token(match: re.Match) -> str:
+        return replacements[match.group(0)]
+
+    html = re.sub(token_pattern, _substitute_token, html)
 
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
