@@ -83,6 +83,7 @@ def first_heading(content: str) -> str:
 def collect_pages() -> tuple:
     nodes: dict = {}
     edges: list = []
+    vault_real = os.path.realpath(WIKI_DIR)
 
     for root, dirs, files in os.walk(WIKI_DIR):
         dirs[:] = [d for d in dirs if d not in {'.obsidian'}]
@@ -90,6 +91,13 @@ def collect_pages() -> tuple:
             if not fname.endswith('.md') or fname in META_FILES:
                 continue
             path = os.path.join(root, fname)
+            file_real = os.path.realpath(path)
+            try:
+                # Ignore paths whose real location lies outside the vault.
+                if os.path.commonpath([vault_real, file_real]) != vault_real:
+                    continue
+            except ValueError:
+                continue
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
