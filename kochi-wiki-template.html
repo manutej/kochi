@@ -4,17 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>KOCHI 故智 · Knowledge Universe</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-  <!--
-    CDN: 3d-force-graph UMD (bundles THREE internally). Classic script — no module/importmap needed.
-    Works in file:// context with no CORS issues.
-  -->
-  <script src="https://cdn.jsdelivr.net/npm/3d-force-graph/dist/3d-force-graph.min.js"></script>
+  __KOCHI_INLINE_SCRIPT__
 
   <style>
+    __KOCHI_INLINE_FONTS__
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     /* ── CSS custom properties — dual theme ─────────── */
@@ -196,7 +189,7 @@ setTimeout(() => {
 <!-- Header + legend -->
 <div id="header" class="glass">
   <h1>KOCHI <span class="sub">故智</span></h1>
-  <div id="vault-stats">545 nodes · 2001 edges · 12 clusters</div>
+  <div id="vault-stats">__KOCHI_VAULT_STATS__</div>
   <div id="legend"></div>
 </div>
 
@@ -232,7 +225,7 @@ setTimeout(() => {
   </div>
 </div>
 
-<!-- Embedded graph data (phi-computed, 545 nodes) -->
+<!-- Embedded graph data (phi-computed) -->
 <script type="application/json" id="kd">GRAPH_JSON_PLACEHOLDER</script>
 
 <!-- Main script (UMD globals: window.THREE, window.ForceGraph3D) -->
@@ -250,6 +243,7 @@ const COLORS = {
     source:         '#fbbf24',   // amber-400
     hub:            '#c084fc',   // purple-400
     query:          '#fb7185',   // rose-400
+    repo:           '#a78bfa',   // violet-400
     _default:       '#94a3b8',
   },
   light: {
@@ -260,6 +254,7 @@ const COLORS = {
     source:         '#b45309',   // amber-700
     hub:            '#6d28d9',   // violet-700
     query:          '#be123c',   // rose-700
+    repo:           '#7c3aed',   // violet-600
     _default:       '#64748b',
   },
 };
@@ -274,6 +269,7 @@ const TYPE_CFG = {
   source:  { label: 'Source',  mult: 0.75 },
   hub:     { label: 'Hub',     mult: 2.8 },
   query:   { label: 'Query',   mult: 1.6 },
+  repo:    { label: 'Repo',    mult: 1.2 },
 };
 
 // Entity kind config
@@ -282,6 +278,15 @@ const EKIND_CFG = {
   product: { label: 'Products', symbol: '◆' },
   org:     { label: 'Orgs',     symbol: '▣' },
 };
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let isDark      = true;
@@ -332,7 +337,7 @@ if (typeof ForceGraph3D === 'undefined') {
   dismissLoader = () => {}; // keep loader visible to show error
   throw new Error('ForceGraph3D unavailable');
 }
-document.getElementById('l-sub').textContent = 'Constructing 545-node graph…';
+document.getElementById('l-sub').textContent = '__KOCHI_LOADER_SUB__';
 
 const Graph = ForceGraph3D({ controlType: 'orbit' })
   .backgroundColor(isDark ? '#09090b' : '#f1f5f9')
@@ -345,8 +350,8 @@ const Graph = ForceGraph3D({ controlType: 'orbit' })
       background:rgba(7,7,9,.95);border:1px solid rgba(255,255,255,.1);
       border-radius:8px;padding:8px 12px;color:#e2e8f0;
       max-width:240px;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,.7)">
-      <strong style="color:#f1f5f9;display:block;margin-bottom:3px">${n.label}</strong>
-      ${n.summary ? `<span style="color:#94a3b8;font-size:11px">${n.summary.slice(0,120)}${n.summary.length>120?'…':''}</span>` : ''}
+      <strong style="color:#f1f5f9;display:block;margin-bottom:3px">${escapeHtml(n.label)}</strong>
+      ${n.summary ? `<span style="color:#94a3b8;font-size:11px">${escapeHtml(n.summary.slice(0, 120))}${n.summary.length>120?'…':''}</span>` : ''}
     </div>`)
   .linkColor(() => isDark ? '#334155' : '#cbd5e1')
   .linkOpacity(isDark ? 0.28 : 0.35)
@@ -386,19 +391,23 @@ function buildLegend() {
   if (colorMode === 'type') {
     const counts = {};
     GD.nodes.forEach(n => { counts[n.type] = (counts[n.type]||0)+1; });
-    const rows = [
-      ['hub',     palette.hub,            'Hub'],
-      ['concept', palette.concept,        'Concept'],
-      ['entity',  palette.entity_person,  'Entity'],
-      ['source',  palette.source,         'Source'],
-      ['query',   palette.query,          'Query'],
+    const prefer = ['hub', 'concept', 'entity', 'source', 'query', 'repo'];
+    const types = [
+      ...prefer.filter(t => counts[t]),
+      ...Object.keys(counts).filter(t => !prefer.includes(t)).sort(),
     ];
-    el.innerHTML = rows.map(([t, c, label]) => `
+    el.innerHTML = types.map(t => {
+      const label = TYPE_CFG[t]?.label ?? (t.charAt(0).toUpperCase() + t.slice(1));
+      const c = t === 'entity'
+        ? palette.entity_person
+        : (palette[t] || palette._default);
+      return `
       <div class="leg-row">
         <div class="leg-pip" style="background:${c};box-shadow:0 0 6px ${c}55"></div>
-        <span>${label}</span>
-        <span class="leg-count">${counts[t]??0}</span>
-      </div>`).join('');
+        <span>${escapeHtml(label)}</span>
+        <span class="leg-count">${counts[t]}</span>
+      </div>`;
+    }).join('');
   } else {
     const counts = {};
     GD.nodes.forEach(n => { counts[n.community]=(counts[n.community]||0)+1; });
@@ -456,11 +465,12 @@ buildFilterBar();
 function openReader(node) {
   const col = trueColor(node);
   const palette = isDark ? COLORS.dark : COLORS.light;
-  const ekind = node.entity_kind ? ` · ${node.entity_kind}` : '';
+  const typeLabel = escapeHtml(TYPE_CFG[node.type]?.label ?? node.type);
+  const ekind = node.entity_kind ? ` · ${escapeHtml(node.entity_kind)}` : '';
 
   document.getElementById('r-badge').innerHTML = `
     <span class="r-badge" style="background:${col}1a;color:${col}">
-      ${(TYPE_CFG[node.type]?.label ?? node.type).toUpperCase()}${ekind.toUpperCase()}
+      ${typeLabel.toUpperCase()}${ekind.toUpperCase()}
     </span>`;
   document.getElementById('r-title').textContent  = node.label;
   document.getElementById('r-summary').textContent = node.summary || 'No summary available.';
@@ -468,11 +478,11 @@ function openReader(node) {
     <div class="r-meta">
       <div class="r-cell"><div class="r-clabel">Degree</div><div class="r-cval">${node.degree}</div></div>
       <div class="r-cell"><div class="r-clabel">Centrality</div><div class="r-cval">${(node.centrality*100).toFixed(2)}%</div></div>
-      <div class="r-cell"><div class="r-clabel">Cluster</div><div class="r-cval" style="color:${col}">${node.community}</div></div>
+      <div class="r-cell"><div class="r-clabel">Cluster</div><div class="r-cval" style="color:${col}">${escapeHtml(node.community)}</div></div>
     </div>`;
   const tags = node.tags ?? [];
   document.getElementById('r-tags').innerHTML = tags.length
-    ? `<div class="r-tags">${tags.map(t=>`<span class="r-tag">${t}</span>`).join('')}</div>`
+    ? `<div class="r-tags">${tags.map(t=>`<span class="r-tag">${escapeHtml(t)}</span>`).join('')}</div>`
     : '';
 
   document.getElementById('reader').classList.add('open');

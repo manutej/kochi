@@ -19,11 +19,13 @@ python3 -c "import networkx, yaml" 2>/dev/null || {
 # Set WIKI_DIR override via env so kochi_layout.py can pick it up
 KOCHI_WIKI_DIR="$WIKI_DIR" python3 kochi_layout.py
 
-python3 -c "
-with open('kochi-graph.json') as f: j=f.read()
-with open('kochi-wiki-template.html') as f: t=f.read()
-open('$OUT_HTML','w').write(t.replace('GRAPH_JSON_PLACEHOLDER',j))
-print('Built: $OUT_HTML (' + str(len(open('$OUT_HTML').read())//1024) + 'KB)')
+KOCHI_OUT_HTML="$OUT_HTML" python3 -c "
+import os
+import kochi_layout
+out = os.environ['KOCHI_OUT_HTML']
+kochi_layout.embed_wiki_html('kochi-wiki-template.html', out, 'kochi-graph.json')
+size_kb = os.path.getsize(out) // 1024
+print(f'Built: {out} ({size_kb}KB)')
 "
 
 echo ""

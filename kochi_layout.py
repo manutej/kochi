@@ -15,6 +15,7 @@ Run from KOCHI/ directory:
 Output: ui/kochi-graph.json
 """
 
+import base64
 import os
 import re
 import json
@@ -33,12 +34,15 @@ except ImportError:
     print("ERROR: networkx not found. Run: pip install networkx", file=sys.stderr)
     sys.exit(1)
 
-WIKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'wiki')
+_DEFAULT_WIKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample-wiki')
+WIKI_DIR = os.environ.get('KOCHI_WIKI_DIR') or _DEFAULT_WIKI_DIR
 OUT_JSON  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kochi-graph.json')
 
 META_FILES = {'index.md', 'log.md', 'hot.md'}
 
 WIKILINK_RE   = re.compile(r'\[\[([^\]|#\[]+)(?:\|[^\]]+)?\]\]')
+MDLINK_RE     = re.compile(r'\[[^\]]*\]\(([^)#]+\.md)\)')
+HEADING_RE    = re.compile(r'^#\s+(.+)$', re.MULTILINE)
 FRONTMATTER_RE = re.compile(r'^---\s*\n(.*?)\n---', re.DOTALL)
 
 # ── Golden ratio constants ────────────────────────────────────────────────────
@@ -62,9 +66,24 @@ def extract_wikilinks(content: str) -> list:
     return [slug.strip().lower() for slug in WIKILINK_RE.findall(content) if slug.strip()]
 
 
+def extract_markdown_links(content: str) -> list:
+    slugs = []
+    for target in MDLINK_RE.findall(content):
+        base = os.path.basename(target.strip())
+        if base.lower().endswith('.md'):
+            slugs.append(os.path.splitext(base)[0].lower())
+    return slugs
+
+
+def first_heading(content: str) -> str:
+    m = HEADING_RE.search(content)
+    return m.group(1).strip() if m else ''
+
+
 def collect_pages() -> tuple:
     nodes: dict = {}
     edges: list = []
+    vault_real = os.path.realpath(WIKI_DIR)
 
     for root, dirs, files in os.walk(WIKI_DIR):
         dirs[:] = [d for d in dirs if d not in {'.obsidian'}]
@@ -72,41 +91,64 @@ def collect_pages() -> tuple:
             if not fname.endswith('.md') or fname in META_FILES:
                 continue
             path = os.path.join(root, fname)
+            file_real = os.path.realpath(path)
+            try:
+                # Ignore paths whose real location lies outside the vault.
+                if os.path.commonpath([vault_real, file_real]) != vault_real:
+                    continue
+            except ValueError:
+                continue
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            fm = parse_frontmatter(content)
-            if not fm or 'type' not in fm:
-                continue
+            has_fm = bool(FRONTMATTER_RE.match(content))
+            fm = parse_frontmatter(content) if has_fm else {}
 
-            node_id = os.path.splitext(fname)[0].lower()
-            ntype   = str(fm.get('type', 'concept'))
+            if has_fm:
+                if not fm or 'type' not in fm:
+                    continue
+                node_id = os.path.splitext(fname)[0].lower()
+                ntype   = str(fm.get('type', 'concept'))
+                label   = str(fm.get('title', node_id))
+                summary = str(fm.get('summary', ''))[:200]
+                tags    = fm.get('tags', []) or []
+                body_start = content.find('\n---', 3)
+                body = content[body_start:] if body_start != -1 else content
+            else:
+                node_id = os.path.splitext(fname)[0].lower()
+                ntype   = 'concept'
+                label   = first_heading(content) or os.path.splitext(fname)[0]
+                summary = ''
+                tags    = []
+                body = content
 
             nodes[node_id] = {
                 'id':          node_id,
-                'label':       str(fm.get('title', node_id)),
+                'label':       label,
                 'type':        ntype,
                 'entity_kind': str(fm.get('entity_kind', '')) if ntype == 'entity' else '',
-                'summary':     str(fm.get('summary', ''))[:200],
-                'tags':        fm.get('tags', []) or [],
+                'summary':     summary,
+                'tags':        tags,
             }
 
-            # Related frontmatter wikilinks
-            related = fm.get('related', [])
-            if isinstance(related, list):
-                for item in related:
-                    if isinstance(item, str):
-                        slug = re.sub(r'^\[\[|\]\]$', '', item)
-                        slug = slug.split('|')[0].split('#')[0].strip().lower()
-                        if slug:
-                            edges.append((node_id, slug))
+            if has_fm:
+                # Related frontmatter wikilinks
+                related = fm.get('related', [])
+                if isinstance(related, list):
+                    for item in related:
+                        if isinstance(item, str):
+                            slug = re.sub(r'^\[\[|\]\]$', '', item)
+                            slug = slug.split('|')[0].split('#')[0].strip().lower()
+                            if slug:
+                                edges.append((node_id, slug))
 
-            # Body wikilinks (skip frontmatter block)
-            body_start = content.find('\n---', 3)
-            body = content[body_start:] if body_start != -1 else content
             for link in extract_wikilinks(body):
                 if link != node_id:
                     edges.append((node_id, link))
+            if not has_fm:
+                for link in extract_markdown_links(body):
+                    if link != node_id:
+                        edges.append((node_id, link))
 
     return nodes, edges
 
@@ -276,6 +318,81 @@ def assemble(nodes, edges, G, pos, deg, btw, partition):
                 out_links.append({'source': src, 'target': dst})
 
     return {'nodes': out_nodes, 'links': out_links}
+
+
+def graph_stats(output: dict) -> tuple:
+    n_nodes = len(output['nodes'])
+    n_links = len(output['links'])
+    n_comms = len({n['community'] for n in output['nodes']}) if output['nodes'] else 0
+    return n_nodes, n_links, n_comms
+
+
+_FONT_FACE_RULES = [
+    ('inter-latin-300-normal.woff2', "'Inter'", 300, 'normal'),
+    ('inter-latin-400-normal.woff2', "'Inter'", 400, 'normal'),
+    ('inter-latin-500-normal.woff2', "'Inter'", 500, 'normal'),
+    ('inter-latin-600-normal.woff2', "'Inter'", 600, 'normal'),
+    ('jetbrains-mono-latin-400-normal.woff2', "'JetBrains Mono'", 400, 'normal'),
+    ('jetbrains-mono-latin-500-normal.woff2', "'JetBrains Mono'", 500, 'normal'),
+]
+
+
+def _repo_root() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _inline_font_faces() -> str:
+    fonts_dir = os.path.join(_repo_root(), 'vendor', 'fonts')
+    rules = []
+    for fname, family, weight, style in _FONT_FACE_RULES:
+        path = os.path.join(fonts_dir, fname)
+        with open(path, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('ascii')
+        rules.append(
+            f"@font-face {{ font-family: {family}; font-style: {style}; font-weight: {weight}; "
+            f"font-display: swap; src: url(data:font/woff2;base64,{b64}) format('woff2'); }}"
+        )
+    return '\n    '.join(rules)
+
+
+def _inline_library_script() -> str:
+    lib_path = os.path.join(_repo_root(), 'vendor', '3d-force-graph.min.js')
+    with open(lib_path, 'r', encoding='utf-8') as f:
+        lib = f.read()
+    return f'<script>\n{lib}\n</script>'
+
+
+def embed_wiki_html(template_path: str, out_path: str, graph_path: str) -> None:
+    """Substitute graph JSON, offline assets, and live vault stats into kochi-wiki-template.html."""
+    with open(graph_path, 'r', encoding='utf-8') as f:
+        graph_json = f.read()
+    graph = json.loads(graph_json)
+    n_nodes, n_links, n_comms = graph_stats(graph)
+    vault_stats = f'{n_nodes} nodes · {n_links} edges · {n_comms} clusters'
+    loader_sub = f'Constructing {n_nodes}-node graph…'
+
+    # Prevent </script> breakout inside application/json (JSON.parse restores \u003c → <).
+    graph_json = graph_json.replace('<', '\\u003c')
+
+    with open(template_path, 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    replacements = {
+        'GRAPH_JSON_PLACEHOLDER': graph_json,
+        '__KOCHI_VAULT_STATS__': vault_stats,
+        '__KOCHI_LOADER_SUB__': loader_sub,
+        '__KOCHI_INLINE_FONTS__': _inline_font_faces(),
+        '__KOCHI_INLINE_SCRIPT__': _inline_library_script(),
+    }
+    token_pattern = '|'.join(re.escape(token) for token in replacements)
+
+    def _substitute_token(match: re.Match) -> str:
+        return replacements[match.group(0)]
+
+    html = re.sub(token_pattern, _substitute_token, html)
+
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(html)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
