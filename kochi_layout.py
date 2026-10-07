@@ -363,6 +363,9 @@ def embed_wiki_html(template_path: str, out_path: str, graph_path: str) -> None:
     vault_stats = f'{n_nodes} nodes · {n_links} edges · {n_comms} clusters'
     loader_sub = f'Constructing {n_nodes}-node graph…'
 
+    # Prevent </script> breakout inside application/json (JSON.parse restores \u003c → <).
+    graph_json = graph_json.replace('<', '\\u003c')
+
     with open(template_path, 'r', encoding='utf-8') as f:
         html = f.read()
 

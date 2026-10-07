@@ -453,14 +453,24 @@ buildLegend();
 buildFilterBar();
 
 // ── Reader panel ───────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function openReader(node) {
   const col = trueColor(node);
   const palette = isDark ? COLORS.dark : COLORS.light;
-  const ekind = node.entity_kind ? ` · ${node.entity_kind}` : '';
+  const typeLabel = escapeHtml(TYPE_CFG[node.type]?.label ?? node.type);
+  const ekind = node.entity_kind ? ` · ${escapeHtml(node.entity_kind)}` : '';
 
   document.getElementById('r-badge').innerHTML = `
     <span class="r-badge" style="background:${col}1a;color:${col}">
-      ${(TYPE_CFG[node.type]?.label ?? node.type).toUpperCase()}${ekind.toUpperCase()}
+      ${typeLabel.toUpperCase()}${ekind.toUpperCase()}
     </span>`;
   document.getElementById('r-title').textContent  = node.label;
   document.getElementById('r-summary').textContent = node.summary || 'No summary available.';
@@ -468,11 +478,11 @@ function openReader(node) {
     <div class="r-meta">
       <div class="r-cell"><div class="r-clabel">Degree</div><div class="r-cval">${node.degree}</div></div>
       <div class="r-cell"><div class="r-clabel">Centrality</div><div class="r-cval">${(node.centrality*100).toFixed(2)}%</div></div>
-      <div class="r-cell"><div class="r-clabel">Cluster</div><div class="r-cval" style="color:${col}">${node.community}</div></div>
+      <div class="r-cell"><div class="r-clabel">Cluster</div><div class="r-cval" style="color:${col}">${escapeHtml(node.community)}</div></div>
     </div>`;
   const tags = node.tags ?? [];
   document.getElementById('r-tags').innerHTML = tags.length
-    ? `<div class="r-tags">${tags.map(t=>`<span class="r-tag">${t}</span>`).join('')}</div>`
+    ? `<div class="r-tags">${tags.map(t=>`<span class="r-tag">${escapeHtml(t)}</span>`).join('')}</div>`
     : '';
 
   document.getElementById('reader').classList.add('open');
